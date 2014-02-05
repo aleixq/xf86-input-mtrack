@@ -195,21 +195,22 @@ static void handle_gestures(LocalDevicePtr local, const struct Gestures* gs)
 	const struct MTouch *mt = local->private;
 	static bitmask_t buttons_prev = 0U;
 	int i;
-	int sendMotionEvent = FALSE;
+	int send_motion_event = FALSE;
 
+        send_motion_event = TRUE;
 	for (i = 0; i < 32; i++) {
 		if (GETBIT(gs->buttons, i) == GETBIT(buttons_prev, i))
 			continue;
 		if (GETBIT(gs->buttons, i)) {
 			xf86PostButtonEvent(local->dev, FALSE, i+1, 1, 0, 0);
-			sendMotionEvent = TRUE;
+			send_motion_event = TRUE;
 #if DEBUG_DRIVER
 			xf86Msg(X_INFO, "button %d down\n", i+1);
 #endif
 		}
 		else {
 			xf86PostButtonEvent(local->dev, FALSE, i+1, 0, 0, 0);
-			sendMotionEvent = TRUE;
+			send_motion_event = TRUE;
 #if DEBUG_DRIVER
 			xf86Msg(X_INFO, "button %d up\n", i+1);
 #endif
@@ -217,16 +218,18 @@ static void handle_gestures(LocalDevicePtr local, const struct Gestures* gs)
 	}
 	buttons_prev = gs->buttons;
 
+	/* Give thie HW coordinates to Xserver as absolute coordinates, these coordinates
+	* are not scaled, this is oke if the touchscreen has the same resolution as the display.
+	*/
+	if (mt->cfg.absolute_mode == TRUE)
+		xf86PostMotionEvent(local->dev, 1, 0, 2, mt->state.touch[0].x, mt->state.touch[0].y);
+
+
 	if (gs->move_dx != 0 || gs->move_dy != 0){
-		sendMotionEvent = TRUE;
+		send_motion_event = TRUE;
 		if(mt->cfg.absolute_mode == FALSE)
 			xf86PostMotionEvent(local->dev, 0, 0, 2, gs->move_dx, gs->move_dy);
 	}
-	/* Give the HW coordinates to Xserver as absolute coordinates, these coordinates
-	 * are not scaled, this is oke if the touchscreen has the same resolution as the display.
-	 */
-	if(mt->cfg.absolute_mode == TRUE && sendMotionEvent == TRUE)
-		xf86PostMotionEvent(local->dev, 1, 0, 2, mt->state.touch[0].x, mt->state.touch[0].y);
 }
 
 /* called for each full received packet from the touchpad */
@@ -249,12 +252,10 @@ static int switch_mode(ClientPtr client, DeviceIntPtr dev, int mode)
 		mt->cfg.absolute_mode = TRUE;
 		xf86Msg(X_INFO, "Switing to absolute mode\n");
 		break;
-
 	case Relative:
 		mt->cfg.absolute_mode = FALSE;
 		xf86Msg(X_INFO, "Switing to relative mode\n");
 		break;
-
 	default:
 		return XI_BadMode;
 		break;
